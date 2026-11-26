@@ -46,7 +46,6 @@ jobs:
       OZ_ENV: test
       OZ_DATABASE_URL: postgresql+psycopg://oz:oz@localhost:5432/operation_zero
       OZ_REDIS_URL: redis://localhost:6379/0
-      OZ_JWT_SECRET: ci-only-secret-not-for-deployment-32chars
       OZ_REPORTS_DIR: ./data/reports
     defaults:
       run:

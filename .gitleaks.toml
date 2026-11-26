@@ -5,5 +5,6 @@
 useDefault = true
 
 [allowlist]
-description = "Fake tokens in the redaction test fixtures"
+description = "Fake tokens in the redaction test fixtures and a non-secret CI placeholder"
 paths = ['''backend/tests/test_units\.py''']
+regexes = ['''ci-only-secret-not-for-deployment-32chars''']
