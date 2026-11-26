@@ -31,6 +31,13 @@ Baseline: tag v0.1.0-baseline (commit 2aca48d). 97 backend tests passing.
 - Ask me before deciding anything listed in PRD section 12 open questions.
 - Do not run `npm audit fix --force` unless a package says so.
 
+## Credentials and access
+- Never read, extract, print or reuse tokens or credentials from Git Credential Manager, keyrings, .env files or any other store.
+- If `gh auth status` fails or any command needs authentication, STOP and ask me to log in. Do not work around it.
+- Never run commands outside this repo directory, and never modify git config, global settings or credential helpers.
+- Never change repo settings, branch protection or secrets. Print the commands and let me run them.
+- If you are blocked, say so. Do not look for another way in.
+
 ## Work packages (in order, one PR each)
 1. ci/github-actions-pipeline: backend ruff + pytest with Postgres and Redis services, frontend tsc + build, pip-audit and npm audit, gitleaks, CodeQL, Docker build + Trivy, Dependabot, PR and issue templates, CODEOWNERS, SECURITY.md. Print the gh api commands for branch protection; I run them.
 2. chore/frontend-dependency-upgrades: fix the npm audit findings (vite high/moderate, react-router-dom moderate, esbuild transitive). Needs breaking upgrades (vite 8, react-router 7). Fix the code, keep the build green, document changes.
