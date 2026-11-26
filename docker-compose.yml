@@ -1,0 +1,93 @@
+name: operation-zero
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: oz
+      POSTGRES_PASSWORD: oz
+      POSTGRES_DB: operation_zero
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oz -d operation_zero"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      OZ_DATABASE_URL: postgresql+psycopg://oz:oz@db:5432/operation_zero
+      OZ_REDIS_URL: redis://redis:6379/0
+      OZ_ENABLE_BACKGROUND_WORKERS: "false"
+      OZ_REPORTS_DIR: /app/data/reports
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers"
+    ports:
+      - "8000:8000"
+    volumes:
+      - reports:/app/data/reports
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      OZ_DATABASE_URL: postgresql+psycopg://oz:oz@db:5432/operation_zero
+      OZ_REDIS_URL: redis://redis:6379/0
+      OZ_ENABLE_BACKGROUND_WORKERS: "true"
+      OZ_REPORTS_DIR: /app/data/reports
+    command: ["python", "-m", "app.workers.runner"]
+    volumes:
+      - reports:/app/data/reports
+    depends_on:
+      api:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api/v1
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
+  reports:
