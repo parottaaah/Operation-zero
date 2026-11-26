@@ -1,0 +1,9 @@
+# Deliberate fake credentials used by the redaction unit tests.
+# They must not be reported as leaked secrets, and they must never be replaced
+# with real values.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Fake tokens in the redaction test fixtures"
+paths = ['''backend/tests/test_units\.py''']
