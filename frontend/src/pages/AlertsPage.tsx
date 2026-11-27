@@ -358,8 +358,9 @@ export default function AlertsPage() {
           onCancel={() => setDeleteTarget(null)}
           onConfirm={deleteRule}
         >
-          The rule stops evaluating immediately. Alerts it already fired stay in the queue with their
-          history, and any incident converted from one of those alerts is unaffected.
+          The rule stops evaluating immediately, and the alerts it fired are removed from this queue
+          with it — the stored alert rows cascade with the rule. Incidents already opened from those
+          alerts keep their timeline and the alert excerpt that was attached as evidence.
         </ConfirmDialog>
       )}
 
