@@ -82,16 +82,31 @@ def test_security_headers_and_request_id(client):
 def test_openapi_contract_contains_mvp_surface(client):
     spec = client.get("/openapi.json").json()
     paths = spec["paths"]
-    for required in [
-        "/api/v1/auth/register",
-        "/api/v1/workspaces/{workspace_id}/services",
-        "/api/v1/ingest/logs",
-        "/api/v1/workspaces/{workspace_id}/logs",
-        "/api/v1/workspaces/{workspace_id}/alerts",
-        "/api/v1/workspaces/{workspace_id}/incidents",
-        "/api/v1/workspaces/{workspace_id}/incidents/{incident_id}/ai-analysis",
-        "/api/v1/workspaces/{workspace_id}/audit-events",
-        "/api/v1/webhooks/github",
-    ]:
-        assert required in paths, required
+
+    # Every core path and method from PRD §9, using the real workspace-scoped
+    # paths emitted by FastAPI. Auth registration is included as a prerequisite.
+    required = [
+        ("post", "/api/v1/auth/register"),
+        ("post", "/api/v1/workspaces"),
+        ("get", "/api/v1/workspaces/{workspace_id}"),
+        ("post", "/api/v1/workspaces/{workspace_id}/services"),
+        ("get", "/api/v1/workspaces/{workspace_id}/services"),
+        ("get", "/api/v1/workspaces/{workspace_id}/services/{service_id}/health"),
+        ("post", "/api/v1/ingest/logs"),
+        ("get", "/api/v1/workspaces/{workspace_id}/logs"),
+        ("post", "/api/v1/workspaces/{workspace_id}/alert-rules"),
+        ("get", "/api/v1/workspaces/{workspace_id}/alerts"),
+        ("post", "/api/v1/workspaces/{workspace_id}/alerts/{alert_id}/acknowledge"),
+        ("post", "/api/v1/workspaces/{workspace_id}/incidents"),
+        ("get", "/api/v1/workspaces/{workspace_id}/incidents/{incident_id}"),
+        ("patch", "/api/v1/workspaces/{workspace_id}/incidents/{incident_id}"),
+        ("post", "/api/v1/workspaces/{workspace_id}/incidents/{incident_id}/evidence"),
+        ("post", "/api/v1/workspaces/{workspace_id}/incidents/{incident_id}/ai-analysis"),
+        ("post", "/api/v1/workspaces/{workspace_id}/integrations/github/connect"),
+        ("post", "/api/v1/webhooks/github"),
+        ("get", "/api/v1/workspaces/{workspace_id}/audit-events"),
+    ]
+    for method, path in required:
+        assert path in paths, path
+        assert method in paths[path], f"{method.upper()} {path}"
     assert spec["info"]["title"] == "OPERATION ZERO"
