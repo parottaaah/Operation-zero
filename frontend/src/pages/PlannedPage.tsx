@@ -9,7 +9,6 @@ import { Card, Notice, PageHeader } from "../components/ui";
  * and add a real page the moment that view lands.
  */
 type ScreenKey =
-  | "logs"
   | "alerts"
   | "incidents"
   | "incident"
@@ -27,20 +26,6 @@ interface ScreenSpec {
 }
 
 const SCREENS: Record<ScreenKey, ScreenSpec> = {
-  logs: {
-    title: "Logs",
-    subtitle: "Bounded, redacted log exploration for one workspace.",
-    api: [
-      "GET /workspaces/{id}/logs with severity, service, text and time-range filters",
-      "POST /ingest/logs with an X-Ingestion-Key header and idempotency keys",
-      "Redaction of secrets and personal data before persistence",
-    ],
-    planned: [
-      "Filter bar with URL-persisted state and cursor pagination",
-      "Event detail panel showing trace id, attributes and redaction count",
-      "Copy-ready query links to paste into an incident timeline",
-    ],
-  },
   alerts: {
     title: "Alerts",
     subtitle: "Fired alerts, deduplication state and the rules behind them.",
@@ -185,8 +170,9 @@ export default function PlannedPage({ screen }: { screen: ScreenKey }) {
       </div>
       <Card title="Working views today">
         <p style={{ margin: 0 }}>
-          <Link to="/">Overview</Link> and <Link to="/services">Services</Link> are implemented
-          end to end, including the service registration form and ingestion-key reveal.
+          <Link to="/">Overview</Link>, <Link to="/services">Services</Link> and{" "}
+          <Link to="/logs">Logs</Link> are implemented end to end, including the service registration
+          form, the ingestion-key reveal and the log explorer.
         </p>
       </Card>
     </div>

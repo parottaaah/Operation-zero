@@ -19,8 +19,8 @@ This README covers only how to run and verify what is in the repository today.
 | Incident lifecycle, timeline, evidence links, reports (MD/PDF) | Implemented |
 | AI investigation with citation integrity checks | Implemented (`local-deterministic` by default) |
 | Background workers (health checks, alert evaluation) | Implemented |
-| Frontend: sign-in, register, overview, services | Implemented |
-| Frontend: logs, alerts, incidents, deployments, security, integrations, reports, settings | **Not built yet** — routes render an explicit "not built" screen that lists the endpoints already available |
+| Frontend: sign-in, register, overview, services, log explorer | Implemented |
+| Frontend: alerts, incidents, deployments, security, integrations, reports, settings | **Not built yet** — routes render an explicit "not built" screen that lists the endpoints already available |
 | GitHub OAuth / webhooks | Backend implemented, UI not built |
 
 Nothing in the UI is mocked: screens that do not exist say so rather than showing placeholder
@@ -121,9 +121,10 @@ backend/
   tests/          API, tenancy/RBAC, worker, AI, seed tests
 frontend/
   src/
-    pages/        Login, Register, Overview, Services (+ Planned screen)
+    pages/        Login, Register, Overview, Services, Logs (+ Planned screen)
     components/   Layout, UI primitives
     auth/         AuthContext (token + workspace selection)
+    hooks/        useAsync, useCursorPage (keyset pagination over CursorPage endpoints)
     lib/          api client, types, formatters
 ```
 
@@ -141,6 +142,6 @@ frontend/
 
 ## Known gaps
 
-1. The eight screens listed as "not built" above.
+1. The seven screens listed as "not built" above.
 2. No notification centre UI (endpoint `GET /workspaces/{id}/notifications` exists).
 3. No CI pipeline in the repository yet — tests are run locally via `make test`.

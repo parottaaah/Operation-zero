@@ -4,6 +4,7 @@ import { useAuth } from "./auth/AuthContext";
 import Layout from "./components/Layout";
 import { EmptyState, LoadingBlock } from "./components/ui";
 import LoginPage from "./pages/LoginPage";
+import LogsPage from "./pages/LogsPage";
 import OverviewPage from "./pages/OverviewPage";
 import PlannedPage from "./pages/PlannedPage";
 import RegisterPage from "./pages/RegisterPage";
@@ -73,7 +74,7 @@ export default function App() {
         <Route element={<RequireWorkspace />}>
           <Route index element={<OverviewPage />} />
           <Route path="services" element={<ServicesPage />} />
-          <Route path="logs" element={<PlannedPage screen="logs" />} />
+          <Route path="logs" element={<LogsPage />} />
           <Route path="alerts" element={<PlannedPage screen="alerts" />} />
           <Route path="incidents" element={<PlannedPage screen="incidents" />} />
           <Route path="incidents/:incidentId" element={<PlannedPage screen="incident" />} />
