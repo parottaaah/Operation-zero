@@ -78,10 +78,18 @@ class Integration(UUIDMixin, TimestampMixin, Base):
 class WebhookEvent(UUIDMixin, Base):
     __tablename__ = "webhook_events"
     __table_args__ = (
-        UniqueConstraint("provider", "delivery_id", name="uq_webhook_provider_delivery"),
+        UniqueConstraint(
+            "workspace_id", "provider", "delivery_id", name="uq_webhook_workspace_provider_delivery"
+        ),
         Index("ix_webhook_workspace_time", "workspace_id", "received_at"),
         Index("ix_webhook_integration_time", "integration_id", "occurred_at"),
-        Index("uq_webhook_provider_body_sha256", "provider", "body_sha256", unique=True),
+        Index(
+            "uq_webhook_workspace_provider_body",
+            "workspace_id",
+            "provider",
+            "body_sha256",
+            unique=True,
+        ),
     )
 
     workspace_id: Mapped[uuid.UUID] = mapped_column(
