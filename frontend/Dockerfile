@@ -7,7 +7,7 @@ ARG VITE_API_BASE_URL=/api/v1
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
 
-FROM nginx:1.29-alpine3.23
+FROM nginx:1.31-alpine3.23
 
 # Apply Alpine security updates for packages already present in the image.
 # Upgrading only the affected packages avoids pulling in new tools or
