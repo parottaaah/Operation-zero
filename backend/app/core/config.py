@@ -73,6 +73,9 @@ class Settings(BaseSettings):
     alert_eval_interval_seconds: int = 60
     worker_batch_size: int = 50
     worker_max_backoff_seconds: int = 300
+    worker_max_attempts: int = 3
+    worker_retry_base_seconds: float = 0.5
+    worker_retry_max_seconds: float = 4.0
 
     # --- Retention defaults ----------------------------------------------
     telemetry_default_retention_days: int = 30
