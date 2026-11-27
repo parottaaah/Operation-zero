@@ -127,10 +127,7 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.txt
 
-      # Advisory until the dependency work package lands. This step reports
-      # findings in the log but does not block the pipeline yet.
-      - name: pip-audit (advisory)
-        continue-on-error: true
+      - name: pip-audit (fails on known vulnerabilities)
         run: |
           pip install pip-audit
           pip-audit -r backend/requirements.txt --desc
@@ -142,11 +139,11 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      # Existing moderate/high findings are fixed in chore/frontend-dependency-upgrades.
-      # Critical findings fail now so a regression cannot slip through unnoticed.
-      - name: npm audit (fails on critical)
+      # The dependency upgrade removed all known findings. Fail on high or
+      # critical so a regression cannot slip through unnoticed.
+      - name: npm audit (fails on high or critical)
         working-directory: frontend
-        run: npm audit --audit-level=critical
+        run: npm audit --audit-level=high
 
   docker:
     name: Docker build + Trivy
@@ -183,20 +180,30 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
-      # Advisory for now: base-image CVEs are tracked by Dependabot and the
-      # dependency work package. SARIF results land in the Security tab.
-      - name: Trivy scan ${{ matrix.image }}
+      # Keep every severity visible in the Security tab. This step never fails
+      # the job; the blocking gate below uses only the CRITICAL/HIGH subset.
+      - name: Trivy SARIF report ${{ matrix.image }}
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ matrix.image }}:ci
           format: sarif
           output: trivy-${{ matrix.image }}.sarif
-          severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "0"
 
       - name: Upload Trivy SARIF
+        if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-${{ matrix.image }}.sarif
           category: trivy-${{ matrix.image }}
+
+      # Blocking gate: fail on fixable CRITICAL/HIGH findings only.
+      - name: Trivy gate ${{ matrix.image }}
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}:ci
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
