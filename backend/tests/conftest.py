@@ -1,7 +1,13 @@
-"""Test fixtures: isolated SQLite database, TestClient and tenant helpers."""
+"""Test fixtures: isolated database, TestClient and tenant helpers.
+
+By default the suite uses a fast in-memory SQLite database. Set
+``OZ_TEST_DATABASE_URL`` to a PostgreSQL URL to run the same suite against a real
+PostgreSQL instance (CI does this on every pull request).
+"""
 
 from __future__ import annotations
 
+import os
 import uuid
 from collections.abc import Iterator
 
@@ -18,19 +24,32 @@ from app.main import app
 from app.models import Base, Role
 
 VALID_PASSWORD = "CorrectHorse9"
+TEST_DATABASE_URL = os.getenv("OZ_TEST_DATABASE_URL", "").strip()
 
 
 @pytest.fixture()
 def engine():
+    if TEST_DATABASE_URL:
+        engine = create_engine(TEST_DATABASE_URL, pool_pre_ping=True)
+        Base.metadata.create_all(bind=engine)
+        try:
+            yield engine
+        finally:
+            Base.metadata.drop_all(bind=engine)
+            engine.dispose()
+        return
+
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
     Base.metadata.create_all(bind=engine)
-    yield engine
-    Base.metadata.drop_all(bind=engine)
-    engine.dispose()
+    try:
+        yield engine
+    finally:
+        Base.metadata.drop_all(bind=engine)
+        engine.dispose()
 
 
 @pytest.fixture()

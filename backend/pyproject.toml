@@ -18,6 +18,9 @@ include = ["app*"]
 testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "integration: requires a live PostgreSQL or Redis service",
+]
 
 [tool.ruff]
 target-version = "py311"
