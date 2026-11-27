@@ -1,8 +1,14 @@
-FROM python:3.12-slim
+FROM python:3.12-slim-trixie
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
+
+# Debian security update for libzstd1 (CVE-2026-124851). Upgrade only the
+# affected package that is already in the base image; no new packages.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends --only-upgrade libzstd1 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
