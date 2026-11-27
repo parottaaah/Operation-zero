@@ -164,12 +164,13 @@ The following audit notes were completed in `test/backend-security-coverage`:
 | Webhook replay | `WebhookEvent` dedupe is workspace-scoped: unique `(workspace_id, provider, delivery_id)` and unique `(workspace_id, provider, body_sha256)` (`backend/app/models/integration.py:80-93`; migration `2d7e7c869f2d`). `backend/app/api/v1/webhooks.py:32-154` fans a signed delivery out to every connected workspace and rejects a new delivery ID carrying the same body within that workspace. `backend/tests/test_integrations.py:261` covers two workspaces sharing a repository (both receive the event, replay is duplicate, a new event reaches both); `:318` covers same delivery ID, new delivery ID with the same body, and a genuinely new event. No timestamp window is added: GitHub redeliveries carry the original payload. |
 | `POST /workspaces` | Direct test added at `backend/tests/test_tenancy_rbac.py:139`. |
 | `GET /workspaces/{id}` | Corrected: it was already directly tested at `backend/tests/test_tenancy_rbac.py:101,109`. The earlier “no direct test” note was wrong. |
+| Worker retries + dead-letter | Health checks and alert rules retry per job with bounded attempts and exponential delay (`backend/app/workers/runner.py`; settings `worker_max_attempts`, `worker_retry_base_seconds`, `worker_retry_max_seconds`). Exhausted jobs persist to `worker_dead_letters` (`backend/app/models/platform.py`; migration `5ccac1b7640c`). Tests: `backend/tests/test_worker.py:test_health_check_retries_then_dead_letters`, `test_health_check_retry_succeeds_before_dead_letter`, `test_alert_rule_retries_then_dead_letters`. |
 
 Additional follow-ups opened after this audit:
 
 | Topic | Issue |
 | :--- | :--- |
-| Per-job worker retries + dead-letter table | [#28](https://github.com/parottaaah/Operation-zero/issues/28) |
+| Per-job worker retries + dead-letter table | [#28](https://github.com/parottaaah/Operation-zero/issues/28) — resolved in this PR |
 | Cursor pagination for notifications, incident reports and AI analyses | [#29](https://github.com/parottaaah/Operation-zero/issues/29) |
 | OpenAPI schema snapshot / contract tests | [#30](https://github.com/parottaaah/Operation-zero/issues/30) |
 | MultiFernet rotation for GitHub token encryption | [#31](https://github.com/parottaaah/Operation-zero/issues/31) |
@@ -178,12 +179,13 @@ Additional follow-ups opened after this audit:
 
 ## 6. What is already verified
 
-- **103 backend tests pass** (`cd backend && python -m pytest`).
+- **106 backend tests pass** (`cd backend && python -m pytest`).
 - **Ruff lint and format pass** on `app` and `tests`.
 - **Frontend production build passes** (`npm ci && npm run build`) with Vite 8 / React Router 7.
 - **CI on `main` is green** for the `CI` and `CodeQL` workflows at `f18a928`. The separate `Dependabot Updates` workflow failed while resolving a React 19 peer update; that is not the CI pipeline.
 - **Trivy CRITICAL/HIGH gate:** the merged image scans report 0 open CRITICAL/HIGH. Remaining findings are MEDIUM/LOW/UNKNOWN (G13).
 - **Token encryption and workspace-scoped webhook body replay/fan-out** now have direct tests (see §5a).
+- **Worker per-job retries and dead-letter persistence** now have direct tests (see §5a and issue #28).
 
 ## 7. What this audit does not claim
 
