@@ -7,10 +7,15 @@ import uuid
 from datetime import timedelta
 
 from app.models import (
+    AlertMetric,
+    AlertRule,
+    AlertSeverity,
     AuditEvent,
+    Comparator,
     HealthCheck,
     IdempotencyKey,
     Service,
+    WorkerDeadLetter,
     Workspace,
     utcnow,
 )
@@ -78,10 +83,99 @@ def test_run_health_checks_once_executes_and_commits(session_factory, monkeypatc
     assert executed[0][1] == hc_id
 
 
-def test_evaluate_alerts_once_delegates(session_factory, monkeypatch):
+def _seed_alert_rule(session_factory, workspace_id):
+    with session_factory() as session:
+        rule = AlertRule(
+            workspace_id=workspace_id,
+            name="Worker rule",
+            metric=AlertMetric.AVAILABILITY,
+            comparator=Comparator.LT,
+            threshold=0.9,
+            window_seconds=60,
+            severity=AlertSeverity.WARNING,
+            enabled=True,
+        )
+        session.add(rule)
+        session.commit()
+        return rule.id
+
+
+def test_evaluate_alerts_once_evaluates_rules(session_factory, monkeypatch):
     monkeypatch.setattr(runner, "SessionLocal", session_factory)
-    monkeypatch.setattr(runner, "evaluate_all", lambda session, batch_size=200: [object(), object()])
-    assert runner.evaluate_alerts_once() == 2
+    workspace_id, _, _ = _seed_service(session_factory)
+    _seed_alert_rule(session_factory, workspace_id)
+    monkeypatch.setattr(runner, "evaluate_rule", lambda session, rule: object())
+    assert runner.evaluate_alerts_once() == 1
+
+
+def test_health_check_retries_then_dead_letters(session_factory, monkeypatch):
+    monkeypatch.setattr(runner, "SessionLocal", session_factory)
+    monkeypatch.setattr(runner.settings, "worker_max_attempts", 3)
+    monkeypatch.setattr(runner.settings, "worker_retry_base_seconds", 0.0)
+    _, _, health_check_id = _seed_service(session_factory)
+    attempts = []
+
+    async def always_fail(session, service, health_check):
+        attempts.append(health_check.id)
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(runner, "execute_health_check", always_fail)
+    assert asyncio.run(runner.run_health_checks_once()) == 0
+    assert len(attempts) == 3
+
+    with session_factory() as session:
+        row = session.query(WorkerDeadLetter).one()
+        assert row.job_type == "health_check"
+        assert row.job_id == str(health_check_id)
+        assert row.attempts == 3
+        assert "RuntimeError" in row.last_error
+
+
+def test_health_check_retry_succeeds_before_dead_letter(session_factory, monkeypatch):
+    monkeypatch.setattr(runner, "SessionLocal", session_factory)
+    monkeypatch.setattr(runner.settings, "worker_max_attempts", 3)
+    monkeypatch.setattr(runner.settings, "worker_retry_base_seconds", 0.0)
+    _seed_service(session_factory)
+    calls = 0
+
+    async def flaky(session, service, health_check):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("first attempt")
+        service.last_checked_at = utcnow()
+        session.commit()
+
+    monkeypatch.setattr(runner, "execute_health_check", flaky)
+    assert asyncio.run(runner.run_health_checks_once()) == 1
+    assert calls == 2
+
+    with session_factory() as session:
+        assert session.query(WorkerDeadLetter).count() == 0
+
+
+def test_alert_rule_retries_then_dead_letters(session_factory, monkeypatch):
+    monkeypatch.setattr(runner, "SessionLocal", session_factory)
+    monkeypatch.setattr(runner.settings, "worker_max_attempts", 3)
+    monkeypatch.setattr(runner.settings, "worker_retry_base_seconds", 0.0)
+    workspace_id, _, _ = _seed_service(session_factory)
+    rule_id = _seed_alert_rule(session_factory, workspace_id)
+    attempts = []
+
+    def always_fail(session, rule):
+        attempts.append(rule.id)
+        raise RuntimeError("rule boom")
+
+    monkeypatch.setattr(runner, "evaluate_rule", always_fail)
+    assert runner.evaluate_alerts_once() == 0
+    assert len(attempts) == 3
+
+    with session_factory() as session:
+        row = session.query(WorkerDeadLetter).one()
+        assert row.job_type == "alert_rule"
+        assert row.job_id == str(rule_id)
+        assert row.attempts == 3
+        assert "RuntimeError" in row.last_error
 
 
 def test_retention_cleanup_respects_workspace_policy(session_factory, monkeypatch):

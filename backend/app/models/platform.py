@@ -18,7 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base, UUIDMixin, enum_column
+from app.models.base import Base, TimestampMixin, UUIDMixin, enum_column
 
 
 class NotificationStatus(str, enum.Enum):
@@ -68,6 +68,22 @@ class IdempotencyKey(UUIDMixin, Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
 
 
+class WorkerDeadLetter(UUIDMixin, TimestampMixin, Base):
+    __tablename__ = "worker_dead_letters"
+    __table_args__ = (
+        UniqueConstraint("job_type", "job_id", name="uq_worker_dead_letter_job"),
+        Index("ix_worker_dead_letter_workspace_time", "workspace_id", "created_at"),
+    )
+
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    job_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    job_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False)
+    last_error: Mapped[str] = mapped_column(String(1000), default="", nullable=False)
+
+
 class Report(UUIDMixin, Base):
     __tablename__ = "reports"
     __table_args__ = (Index("ix_reports_workspace_time", "workspace_id", "generated_at"),)
@@ -89,4 +105,10 @@ class Report(UUIDMixin, Base):
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), nullable=False)
 
 
-__all__ = ["NotificationStatus", "Notification", "IdempotencyKey", "Report"]
+__all__ = [
+    "NotificationStatus",
+    "Notification",
+    "IdempotencyKey",
+    "Report",
+    "WorkerDeadLetter",
+]

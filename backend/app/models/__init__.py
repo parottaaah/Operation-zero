@@ -29,7 +29,13 @@ from app.models.integration import (
     WebhookEvent,
     WebhookStatus,
 )
-from app.models.platform import IdempotencyKey, Notification, NotificationStatus, Report
+from app.models.platform import (
+    IdempotencyKey,
+    Notification,
+    NotificationStatus,
+    Report,
+    WorkerDeadLetter,
+)
 from app.models.service import (
     Environment,
     HealthCheck,
@@ -83,4 +89,5 @@ __all__ = [
     "NotificationStatus",
     "IdempotencyKey",
     "Report",
+    "WorkerDeadLetter",
 ]
