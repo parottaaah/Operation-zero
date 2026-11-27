@@ -7,7 +7,12 @@ ARG VITE_API_BASE_URL=/api/v1
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 RUN npm run build
 
-FROM nginx:1.27-alpine
+FROM nginx:1.29-alpine3.23
+
+RUN apk upgrade --no-cache \
+    brotli-libs c-ares curl libcrypto3 libcurl libexpat libpng libssl3 \
+    libuuid libxml2 libxslt musl musl-utils nghttp2-libs pcre2 tiff zlib
+
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 RUN chown -R nginx:nginx /usr/share/nginx/html
