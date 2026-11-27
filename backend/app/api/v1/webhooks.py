@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 
 from fastapi import APIRouter, Depends, Header, Request, status
 from fastapi.responses import JSONResponse
+from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -49,12 +52,18 @@ async def github_webhook(
     if not x_github_event or not x_github_delivery:
         raise ValidationFailed("missing GitHub event or delivery headers")
 
-    # Replay protection: a GitHub delivery id is accepted exactly once.
+    # Replay protection: a GitHub delivery id is accepted exactly once. Delivery
+    # ids are not covered by the HMAC, so also fingerprint the exact signed body
+    # and reject a captured body that arrives under a new delivery id.
+    body_sha256 = hashlib.sha256(raw_body).hexdigest()
     duplicate = (
         db.query(WebhookEvent)
         .filter(
             WebhookEvent.provider == "github",
-            WebhookEvent.delivery_id == x_github_delivery[:120],
+            or_(
+                WebhookEvent.delivery_id == x_github_delivery[:120],
+                WebhookEvent.body_sha256 == body_sha256,
+            ),
         )
         .first()
     )
@@ -82,16 +91,35 @@ async def github_webhook(
         logger.info("github webhook ignored (no matching integration)")
         return JSONResponse({"status": "ignored"}, status_code=202)
 
-    event = github.store_webhook(
-        db,
-        event_type=x_github_event,
-        delivery_id=x_github_delivery,
-        payload=payload,
-        signature_verified=True,
-        integration=integration,
-        repository_hint=repository_hint,
-    )
-    db.commit()
+    try:
+        event = github.store_webhook(
+            db,
+            event_type=x_github_event,
+            delivery_id=x_github_delivery,
+            payload=payload,
+            signature_verified=True,
+            integration=integration,
+            repository_hint=repository_hint,
+            body_sha256=body_sha256,
+        )
+        db.commit()
+    except IntegrityError:
+        # Concurrent redelivery: the unique index won, so return the stored row.
+        db.rollback()
+        existing = (
+            db.query(WebhookEvent)
+            .filter(
+                WebhookEvent.provider == "github",
+                or_(
+                    WebhookEvent.delivery_id == x_github_delivery[:120],
+                    WebhookEvent.body_sha256 == body_sha256,
+                ),
+            )
+            .first()
+        )
+        if existing is not None:
+            return JSONResponse({"status": "duplicate", "event_id": str(existing.id)}, status_code=202)
+        raise
     if event.status is not WebhookStatus.VERIFIED:  # pragma: no cover - defensive
         return JSONResponse({"status": event.status.value}, status_code=202)
     return JSONResponse(

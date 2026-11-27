@@ -312,6 +312,7 @@ def store_webhook(
     signature_verified: bool,
     integration: Integration | None,
     repository_hint: str = "",
+    body_sha256: str | None = None,
 ) -> WebhookEvent:
     existing = (
         session.query(WebhookEvent)
@@ -320,6 +321,14 @@ def store_webhook(
     )
     if existing is not None:
         return existing
+    if body_sha256:
+        existing_body = (
+            session.query(WebhookEvent)
+            .filter(WebhookEvent.provider == "github", WebhookEvent.body_sha256 == body_sha256)
+            .first()
+        )
+        if existing_body is not None:
+            return existing_body
 
     parsed = parse_webhook(
         event_type=event_type,
@@ -346,6 +355,7 @@ def store_webhook(
         integration_id=integration.id,
         provider="github",
         delivery_id=delivery_id[:120],
+        body_sha256=body_sha256,
         event_type=parsed["event_type"],
         action=parsed["action"],
         status=WebhookStatus.VERIFIED if signature_verified else WebhookStatus.REJECTED,
