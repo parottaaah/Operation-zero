@@ -37,13 +37,13 @@ Source: PRD §6 “Definition of done”. Each criterion below is the exact word
 
 | # | Criterion | Status | Code evidence | Test evidence | Gap / notes |
 | :---: | :--- | :---: | :--- | :--- | :--- |
-| 1 | Workspace/RBAC creation | **PASS** | `backend/app/api/v1/auth.py:61`; `backend/app/api/v1/workspaces.py:70,217,275`; `backend/app/core/permissions.py:15,46` | `backend/tests/test_auth.py:8`; `backend/tests/test_tenancy_rbac.py:49,61,72,88` | Member-management UI is missing; tracked as G5. |
+| 1 | Workspace/RBAC creation | **PASS** | `backend/app/api/v1/auth.py:61`; `backend/app/api/v1/workspaces.py:70,217,275`; `backend/app/core/permissions.py:15,46` | `backend/tests/test_auth.py:8`; `backend/tests/test_tenancy_rbac.py:49,61,72,88,139` | Member-management UI is missing; tracked as G5. |
 | 2 | Service registration & pass/fail health checks | **PASS** | `backend/app/api/v1/services.py:72`; `backend/app/services/healthcheck.py:23,40` | `backend/tests/test_services.py:23,99,143` | Service detail/history UI is missing; tracked as G6. |
 | 3 | Authenticated structured log ingestion rejecting invalid/unauthorized payloads | **PASS** | `backend/app/api/v1/logs.py:46`; `backend/app/services/redaction.py:134` | `backend/tests/test_logs.py:18,51,62,103,124,142` | Log explorer UI is missing; tracked as G3. |
 | 4 | Alert rule firing on threshold breach | **PASS** | `backend/app/api/v1/alerts.py:105`; `backend/app/services/alerts.py:60,134` | `backend/tests/test_alerts.py:82,99,109,199,260` | Alerts UI is missing; tracked as G4. |
 | 5 | Alert-to-incident conversion with ownership and status updates | **PASS** | `backend/app/api/v1/alerts.py:335`; `backend/app/services/incidents.py:63,127,193` | `backend/tests/test_alerts.py:171`; `backend/tests/test_incidents.py:31,80` | Incident UI is missing; tracked as G1. |
 | 6 | Full incident timeline & linked evidence | **PARTIAL** | `backend/app/services/incidents.py:36,258`; `backend/app/api/v1/incidents.py:310,330` | `backend/tests/test_incidents.py:19,31,93,107,145` | Backend timeline/evidence is complete and tested. Incident detail UI is absent, so the user cannot inspect the full timeline. **G1.** |
-| 7 | Verified GitHub webhooks visible as context | **PARTIAL** | `backend/app/services/github.py:234,263,306`; `backend/app/api/v1/webhooks.py:29`; `backend/app/api/v1/integrations.py:171` | `backend/tests/test_integrations.py:125,152,186` | Signature/replay/dedupe and storage are tested. “Visible as context” requires the deployments/integrations UI, which is absent. **G2.** |
+| 7 | Verified GitHub webhooks visible as context | **PARTIAL** | `backend/app/services/github.py:234,263,306`; `backend/app/api/v1/webhooks.py:32`; `backend/app/api/v1/integrations.py:171` | `backend/tests/test_integrations.py:125,152,186,261,318` | Signature, workspace-scoped delivery/body dedupe, fan-out to every connected workspace and storage are tested. “Visible as context” requires the deployments/integrations UI, which is absent. **G2.** |
 | 8 | Evidence-cited AI summary clearly separating hypotheses | **PARTIAL** | `backend/app/services/ai/orchestrator.py:43,50,112`; `backend/app/services/ai/evidence.py:34`; `backend/app/services/ai/prompts.py:93` | `backend/tests/test_ai.py:36,71,103,130,152,179,197,211` | 4-part output, citation dropping and injection handling are tested. The incident AI panel/feedback UI is absent. **G1.** |
 | 9 | Strict cross-workspace isolation | **PASS** | Tenant filters in `backend/app/api/deps.py` and the query layer; `backend/app/core/permissions.py` | `backend/tests/test_tenancy_rbac.py:8,29,72`; `backend/tests/test_incidents.py:241`; `backend/tests/test_ai.py:211` | Server-side 404 isolation and RBAC are tested. No cross-tenant UI path exists. |
 | 10 | Audit logging of sensitive actions | **PASS** | `backend/app/services/audit.py:15`; calls from incident, integration, AI and workspace services | `backend/tests/test_incidents.py:26,198`; `backend/tests/test_integrations.py:103`; `backend/tests/test_tenancy_rbac.py:72`; `backend/tests/test_ai.py:67` | Audit query UI is missing; tracked as G5. |
@@ -69,7 +69,7 @@ Source: PRD §9 “Initial Data Model (16 core entities)”.
 | 11 | `IncidentEvent` | **PASS** | `backend/app/models/incident.py:110` (`incident_events`) | `backend/tests/test_incidents.py` |
 | 12 | `EvidenceLink` | **PASS** | `backend/app/models/incident.py:134` (`evidence_links`) | `backend/tests/test_incidents.py:107,145` |
 | 13 | `Integration` | **PASS** | `backend/app/models/integration.py:44` (`integrations`) | `backend/tests/test_integrations.py` |
-| 14 | `WebhookEvent` | **PASS** | `backend/app/models/integration.py:79` (`webhook_events`) | `backend/tests/test_integrations.py:152,186` |
+| 14 | `WebhookEvent` | **PASS** | `backend/app/models/integration.py:79` (`webhook_events`) | `backend/tests/test_integrations.py:152,186,261` |
 | 15 | `AuditEvent` | **PASS** | `backend/app/models/audit.py:15` (`audit_events`) | `backend/tests/test_incidents.py:26,198`, `backend/tests/test_integrations.py:103`, `backend/tests/test_tenancy_rbac.py:72` |
 | 16 | `AIAnalysis` | **PASS** | `backend/app/models/ai.py:27` (`ai_analyses`) | `backend/tests/test_ai.py` |
 
@@ -83,8 +83,8 @@ Source: PRD §9 “Core API surface”. The implemented API is workspace-scoped 
 
 | # | PRD endpoint | Implemented path | Status | Handler | Test evidence |
 | :---: | :--- | :--- | :---: | :--- | :--- |
-| 1 | `POST /workspaces` | `/api/v1/workspaces` | **PASS** | `backend/app/api/v1/workspaces.py:70` | Registration flow `backend/tests/test_auth.py:8`; direct route not separately tested |
-| 2 | `GET /workspaces/{id}` | `/api/v1/workspaces/{workspace_id}` | **PASS** | `backend/app/api/v1/workspaces.py:121` | Code path; no direct test |
+| 1 | `POST /workspaces` | `/api/v1/workspaces` | **PASS** | `backend/app/api/v1/workspaces.py:70` | Direct test `backend/tests/test_tenancy_rbac.py:139`; also exercised indirectly by `backend/tests/test_auth.py:8` |
+| 2 | `GET /workspaces/{id}` | `/api/v1/workspaces/{workspace_id}` | **PASS** | `backend/app/api/v1/workspaces.py:121` | Direct tests `backend/tests/test_tenancy_rbac.py:101,109` |
 | 3 | `POST /services` | `/api/v1/workspaces/{workspace_id}/services` | **PASS** | `backend/app/api/v1/services.py:72` | `backend/tests/test_services.py:23` |
 | 4 | `GET /services` | `/api/v1/workspaces/{workspace_id}/services` | **PASS** | `backend/app/api/v1/services.py:143` | `backend/tests/test_services.py:23` |
 | 5 | `GET /services/{id}/health` | `/api/v1/workspaces/{workspace_id}/services/{service_id}/health` | **PASS** | `backend/app/api/v1/services.py:376` | `backend/tests/test_services.py:99` |
@@ -154,13 +154,36 @@ Each gap has a GitHub issue. The UI gaps are PARTIAL in the audit because the ba
 
 ---
 
+## 5a. Post-audit coverage update (work package 4)
+
+The following audit notes were completed in `test/backend-security-coverage`:
+
+| Area | Updated evidence |
+| :--- | :--- |
+| Token encryption | `backend/app/services/github.py:165,182` encrypts before persistence; `backend/app/models/integration.py:65-66` stores `secret_encrypted`; `backend/tests/test_integrations.py:227` asserts the stored value is not the plaintext, decrypts back to it, and the API never returns it. `backend/tests/test_integrations.py:246` asserts production/staging reject an empty `OZ_ENCRYPTION_KEY`. |
+| Webhook replay | `WebhookEvent` dedupe is workspace-scoped: unique `(workspace_id, provider, delivery_id)` and unique `(workspace_id, provider, body_sha256)` (`backend/app/models/integration.py:80-93`; migration `2d7e7c869f2d`). `backend/app/api/v1/webhooks.py:32-154` fans a signed delivery out to every connected workspace and rejects a new delivery ID carrying the same body within that workspace. `backend/tests/test_integrations.py:261` covers two workspaces sharing a repository (both receive the event, replay is duplicate, a new event reaches both); `:318` covers same delivery ID, new delivery ID with the same body, and a genuinely new event. No timestamp window is added: GitHub redeliveries carry the original payload. |
+| `POST /workspaces` | Direct test added at `backend/tests/test_tenancy_rbac.py:139`. |
+| `GET /workspaces/{id}` | Corrected: it was already directly tested at `backend/tests/test_tenancy_rbac.py:101,109`. The earlier “no direct test” note was wrong. |
+
+Additional follow-ups opened after this audit:
+
+| Topic | Issue |
+| :--- | :--- |
+| Per-job worker retries + dead-letter table | [#28](https://github.com/parottaaah/Operation-zero/issues/28) |
+| Cursor pagination for notifications, incident reports and AI analyses | [#29](https://github.com/parottaaah/Operation-zero/issues/29) |
+| OpenAPI schema snapshot / contract tests | [#30](https://github.com/parottaaah/Operation-zero/issues/30) |
+| MultiFernet rotation for GitHub token encryption | [#31](https://github.com/parottaaah/Operation-zero/issues/31) |
+
+---
+
 ## 6. What is already verified
 
-- **97 backend tests pass** (`cd backend && python -m pytest`).
+- **103 backend tests pass** (`cd backend && python -m pytest`).
 - **Ruff lint and format pass** on `app` and `tests`.
 - **Frontend production build passes** (`npm ci && npm run build`) with Vite 8 / React Router 7.
 - **CI on `main` is green** for the `CI` and `CodeQL` workflows at `f18a928`. The separate `Dependabot Updates` workflow failed while resolving a React 19 peer update; that is not the CI pipeline.
 - **Trivy CRITICAL/HIGH gate:** the merged image scans report 0 open CRITICAL/HIGH. Remaining findings are MEDIUM/LOW/UNKNOWN (G13).
+- **Token encryption and workspace-scoped webhook body replay/fan-out** now have direct tests (see §5a).
 
 ## 7. What this audit does not claim
 

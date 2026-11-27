@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 
 from fastapi import APIRouter, Depends, Header, Request, status
 from fastapi.responses import JSONResponse
+from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -18,7 +21,6 @@ from app.models.integration import (
     IntegrationProvider,
     IntegrationStatus,
     WebhookEvent,
-    WebhookStatus,
 )
 from app.services import github
 
@@ -49,17 +51,10 @@ async def github_webhook(
     if not x_github_event or not x_github_delivery:
         raise ValidationFailed("missing GitHub event or delivery headers")
 
-    # Replay protection: a GitHub delivery id is accepted exactly once.
-    duplicate = (
-        db.query(WebhookEvent)
-        .filter(
-            WebhookEvent.provider == "github",
-            WebhookEvent.delivery_id == x_github_delivery[:120],
-        )
-        .first()
-    )
-    if duplicate is not None:
-        return JSONResponse({"status": "duplicate", "event_id": str(duplicate.id)}, status_code=202)
+    # Replay protection is workspace-scoped: a delivery id and the exact signed
+    # body are each accepted once per workspace. Delivery ids are not covered by
+    # the HMAC, so the body fingerprint closes the new-delivery-id replay gap.
+    body_sha256 = hashlib.sha256(raw_body).hexdigest()
 
     try:
         payload = json.loads(raw_body.decode("utf-8"))
@@ -69,33 +64,94 @@ async def github_webhook(
         raise ValidationFailed("webhook body must be a JSON object")
 
     repository_hint = str((payload.get("repository") or {}).get("full_name") or "")
-    integration = (
+    integrations = (
         db.query(Integration)
         .filter(
             Integration.provider == IntegrationProvider.GITHUB,
             Integration.repository_full_name == repository_hint,
             Integration.status == IntegrationStatus.CONNECTED,
         )
-        .first()
+        .all()
     )
-    if integration is None:
+    if not integrations:
         logger.info("github webhook ignored (no matching integration)")
         return JSONResponse({"status": "ignored"}, status_code=202)
 
-    event = github.store_webhook(
-        db,
-        event_type=x_github_event,
-        delivery_id=x_github_delivery,
-        payload=payload,
-        signature_verified=True,
-        integration=integration,
-        repository_hint=repository_hint,
-    )
-    db.commit()
-    if event.status is not WebhookStatus.VERIFIED:  # pragma: no cover - defensive
-        return JSONResponse({"status": event.status.value}, status_code=202)
+    # A delivery fans out to every connected workspace. If a workspace has more
+    # than one matching integration, only the first receives the event.
+    by_workspace: dict[object, Integration] = {}
+    for integration in integrations:
+        by_workspace.setdefault(integration.workspace_id, integration)
+
+    created: list[WebhookEvent] = []
+    duplicates: list[WebhookEvent] = []
+    try:
+        for integration in by_workspace.values():
+            existing = (
+                db.query(WebhookEvent)
+                .filter(
+                    WebhookEvent.workspace_id == integration.workspace_id,
+                    WebhookEvent.provider == "github",
+                    or_(
+                        WebhookEvent.delivery_id == x_github_delivery[:120],
+                        WebhookEvent.body_sha256 == body_sha256,
+                    ),
+                )
+                .first()
+            )
+            if existing is not None:
+                duplicates.append(existing)
+                continue
+            created.append(
+                github.store_webhook(
+                    db,
+                    event_type=x_github_event,
+                    delivery_id=x_github_delivery,
+                    payload=payload,
+                    signature_verified=True,
+                    integration=integration,
+                    repository_hint=repository_hint,
+                    body_sha256=body_sha256,
+                )
+            )
+        db.commit()
+    except IntegrityError:
+        # Concurrent redelivery: the unique index won. Re-read the workspace
+        # rows and report them as duplicates instead of leaking a 500.
+        db.rollback()
+        created = []
+        duplicates = []
+        for integration in by_workspace.values():
+            existing = (
+                db.query(WebhookEvent)
+                .filter(
+                    WebhookEvent.workspace_id == integration.workspace_id,
+                    WebhookEvent.provider == "github",
+                    or_(
+                        WebhookEvent.delivery_id == x_github_delivery[:120],
+                        WebhookEvent.body_sha256 == body_sha256,
+                    ),
+                )
+                .first()
+            )
+            if existing is not None:
+                duplicates.append(existing)
+
+    created_ids = [str(event.id) for event in created]
+    duplicate_ids = [str(event.id) for event in duplicates]
+    if not created_ids:
+        status_value = "duplicate"
+    elif duplicate_ids:
+        status_value = "partial"
+    else:
+        status_value = "verified"
     return JSONResponse(
-        {"status": "verified", "event_id": str(event.id), "duplicate": False},
+        {
+            "status": status_value,
+            "event_id": (created_ids or duplicate_ids or [None])[0],
+            "event_ids": created_ids,
+            "duplicate_event_ids": duplicate_ids,
+        },
         status_code=202,
     )
 

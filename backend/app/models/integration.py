@@ -78,9 +78,18 @@ class Integration(UUIDMixin, TimestampMixin, Base):
 class WebhookEvent(UUIDMixin, Base):
     __tablename__ = "webhook_events"
     __table_args__ = (
-        UniqueConstraint("provider", "delivery_id", name="uq_webhook_provider_delivery"),
+        UniqueConstraint(
+            "workspace_id", "provider", "delivery_id", name="uq_webhook_workspace_provider_delivery"
+        ),
         Index("ix_webhook_workspace_time", "workspace_id", "received_at"),
         Index("ix_webhook_integration_time", "integration_id", "occurred_at"),
+        Index(
+            "uq_webhook_workspace_provider_body",
+            "workspace_id",
+            "provider",
+            "body_sha256",
+            unique=True,
+        ),
     )
 
     workspace_id: Mapped[uuid.UUID] = mapped_column(
@@ -91,6 +100,11 @@ class WebhookEvent(UUIDMixin, Base):
     )
     provider: Mapped[str] = mapped_column(String(40), nullable=False, default="github")
     delivery_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    # SHA-256 of the exact signed request body. Delivery ids are supplied by the
+    # sender and are not covered by the HMAC, so a captured body can be replayed
+    # with a new delivery id. This hash closes that gap. Nullable for legacy rows
+    # created before this column existed.
+    body_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     event_type: Mapped[str] = mapped_column(String(80), nullable=False)
     action: Mapped[str] = mapped_column(String(80), default="", nullable=False)
     status: Mapped[WebhookStatus] = mapped_column(
