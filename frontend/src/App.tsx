@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import Layout from "./components/Layout";
 import { EmptyState, LoadingBlock } from "./components/ui";
+import AlertsPage from "./pages/AlertsPage";
 import LoginPage from "./pages/LoginPage";
 import LogsPage from "./pages/LogsPage";
 import OverviewPage from "./pages/OverviewPage";
@@ -75,7 +76,7 @@ export default function App() {
           <Route index element={<OverviewPage />} />
           <Route path="services" element={<ServicesPage />} />
           <Route path="logs" element={<LogsPage />} />
-          <Route path="alerts" element={<PlannedPage screen="alerts" />} />
+          <Route path="alerts" element={<AlertsPage />} />
           <Route path="incidents" element={<PlannedPage screen="incidents" />} />
           <Route path="incidents/:incidentId" element={<PlannedPage screen="incident" />} />
           <Route path="deployments" element={<PlannedPage screen="deployments" />} />

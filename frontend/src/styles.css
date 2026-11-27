@@ -508,7 +508,8 @@ td.mono {
 .badge.connected,
 .badge.verified,
 .badge.sent,
-.badge.accepted {
+.badge.accepted,
+.badge.enabled {
   color: var(--ok);
   border-color: rgba(90, 215, 176, 0.45);
   background: rgba(90, 215, 176, 0.09);

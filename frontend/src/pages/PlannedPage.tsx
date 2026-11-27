@@ -9,7 +9,6 @@ import { Card, Notice, PageHeader } from "../components/ui";
  * and add a real page the moment that view lands.
  */
 type ScreenKey =
-  | "alerts"
   | "incidents"
   | "incident"
   | "deployments"
@@ -26,20 +25,6 @@ interface ScreenSpec {
 }
 
 const SCREENS: Record<ScreenKey, ScreenSpec> = {
-  alerts: {
-    title: "Alerts",
-    subtitle: "Fired alerts, deduplication state and the rules behind them.",
-    api: [
-      "GET /workspaces/{id}/alerts and /alert-rules",
-      "PATCH /alerts/{id} for acknowledge, mute and resolve",
-      "POST /alerts/{id}/incident to convert a firing alert into an incident",
-    ],
-    planned: [
-      "Alert queue grouped by rule, with occurrence counts",
-      "Rule editor for metric, comparator, threshold and window",
-      "One-click convert to incident with the alert pre-linked as evidence",
-    ],
-  },
   incidents: {
     title: "Incidents",
     subtitle: "Every incident with owner, severity and current lifecycle state.",
@@ -170,9 +155,10 @@ export default function PlannedPage({ screen }: { screen: ScreenKey }) {
       </div>
       <Card title="Working views today">
         <p style={{ margin: 0 }}>
-          <Link to="/">Overview</Link>, <Link to="/services">Services</Link> and{" "}
-          <Link to="/logs">Logs</Link> are implemented end to end, including the service registration
-          form, the ingestion-key reveal and the log explorer.
+          <Link to="/">Overview</Link>, <Link to="/services">Services</Link>,{" "}
+          <Link to="/logs">Logs</Link> and <Link to="/alerts">Alerts</Link> are implemented end to
+          end, including the service registration form, the ingestion-key reveal, the log explorer and
+          the alert queue with its rule editor.
         </p>
       </Card>
     </div>
