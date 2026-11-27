@@ -100,9 +100,24 @@ it points at a reachable endpoint.
 ## Verify
 
 ```bash
-cd backend && python -m pytest -q          # 97 tests
+cd backend && python -m pytest             # 109 tests; Redis test skips without OZ_REDIS_URL
 cd backend && ruff check app tests && ruff format --check app tests
 cd frontend && npm run build               # tsc --noEmit + vite build
+```
+
+Run the suite against PostgreSQL (CI does this on every PR):
+
+```bash
+createdb -h localhost -U oz operation_zero_test   # once
+OZ_TEST_DATABASE_URL=postgresql+psycopg://oz:oz@localhost:5432/operation_zero_test \
+  python -m pytest
+```
+
+Run the Redis rate-limit integration test:
+
+```bash
+OZ_REDIS_URL=redis://localhost:6379/0 OZ_REQUIRE_REDIS_TESTS=1 \
+  python -m pytest tests/test_integration_redis.py
 ```
 
 ## Repository layout
