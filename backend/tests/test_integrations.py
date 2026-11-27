@@ -258,6 +258,63 @@ def test_production_requires_encryption_key(env):
         candidate.validate_startup()
 
 
+def test_webhook_fans_out_to_each_connected_workspace(client, owner, make_tenant, fake_github):
+    second = make_tenant(workspace_name="Second Workspace")
+    for tenant in (owner, second):
+        body = connect(client, tenant)
+        do_callback(client, body["authorize_url"])
+
+    payload = {
+        "ref": "refs/heads/main",
+        "after": "shared123sha",
+        "commits": [{"id": "shared123sha", "timestamp": "2026-11-26T10:00:00Z"}],
+        "repository": {"full_name": "acme/payments"},
+        "sender": {"login": "dev-acme"},
+        "head_commit": {"timestamp": "2026-11-26T10:00:00Z"},
+    }
+    raw = json.dumps(payload).encode()
+
+    first = client.post(
+        "/api/v1/webhooks/github", content=raw, headers=signed_headers(raw, "delivery-shared-1")
+    )
+    assert first.status_code == 202
+    assert first.json()["status"] == "verified"
+    assert len(first.json()["event_ids"]) == 2
+
+    for tenant in (owner, second):
+        events = client.get(tenant.url("/deployments"), headers=tenant.headers).json()["events"]
+        assert len(events) == 1
+        assert events[0]["commit_shas"] == ["shared123sha"]
+
+    replay = client.post(
+        "/api/v1/webhooks/github", content=raw, headers=signed_headers(raw, "delivery-shared-1")
+    )
+    assert replay.status_code == 202
+    assert replay.json()["status"] == "duplicate"
+    assert len(replay.json()["duplicate_event_ids"]) == 2
+
+    for tenant in (owner, second):
+        events = client.get(tenant.url("/deployments"), headers=tenant.headers).json()["events"]
+        assert len(events) == 1
+
+    new_payload = {
+        **payload,
+        "after": "shared456sha",
+        "commits": [{"id": "shared456sha", "timestamp": "2026-11-26T11:00:00Z"}],
+    }
+    new_raw = json.dumps(new_payload).encode()
+    new_event = client.post(
+        "/api/v1/webhooks/github", content=new_raw, headers=signed_headers(new_raw, "delivery-shared-2")
+    )
+    assert new_event.status_code == 202
+    assert new_event.json()["status"] == "verified"
+    assert len(new_event.json()["event_ids"]) == 2
+
+    for tenant in (owner, second):
+        events = client.get(tenant.url("/deployments"), headers=tenant.headers).json()["events"]
+        assert len(events) == 2
+
+
 def test_webhook_replay_fingerprints_signed_body(client, owner, fake_github):
     body = connect(client, owner)
     do_callback(client, body["authorize_url"])
