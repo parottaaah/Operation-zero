@@ -9,6 +9,9 @@ RUN npm run build
 
 FROM nginx:1.29-alpine3.23
 
+# Apply Alpine security updates for packages already present in the image.
+# Upgrading only the affected packages avoids pulling in new tools or
+# changing the nginx package itself.
 RUN apk upgrade --no-cache \
     brotli-libs c-ares curl libcrypto3 libcurl libexpat libpng libssl3 \
     libuuid libxml2 libxslt musl musl-utils nghttp2-libs pcre2 tiff zlib
