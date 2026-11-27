@@ -43,7 +43,7 @@ Source: PRD §6 “Definition of done”. Each criterion below is the exact word
 | 4 | Alert rule firing on threshold breach | **PASS** | `backend/app/api/v1/alerts.py:105`; `backend/app/services/alerts.py:60,134` | `backend/tests/test_alerts.py:82,99,109,199,260` | Alerts UI is missing; tracked as G4. |
 | 5 | Alert-to-incident conversion with ownership and status updates | **PASS** | `backend/app/api/v1/alerts.py:335`; `backend/app/services/incidents.py:63,127,193` | `backend/tests/test_alerts.py:171`; `backend/tests/test_incidents.py:31,80` | Incident UI is missing; tracked as G1. |
 | 6 | Full incident timeline & linked evidence | **PARTIAL** | `backend/app/services/incidents.py:36,258`; `backend/app/api/v1/incidents.py:310,330` | `backend/tests/test_incidents.py:19,31,93,107,145` | Backend timeline/evidence is complete and tested. Incident detail UI is absent, so the user cannot inspect the full timeline. **G1.** |
-| 7 | Verified GitHub webhooks visible as context | **PARTIAL** | `backend/app/services/github.py:234,263,306`; `backend/app/api/v1/webhooks.py:29`; `backend/app/api/v1/integrations.py:171` | `backend/tests/test_integrations.py:125,152,186,261` | Signature, delivery-id dedupe, signed-body replay dedupe and storage are tested. “Visible as context” requires the deployments/integrations UI, which is absent. **G2.** |
+| 7 | Verified GitHub webhooks visible as context | **PARTIAL** | `backend/app/services/github.py:234,263,306`; `backend/app/api/v1/webhooks.py:32`; `backend/app/api/v1/integrations.py:171` | `backend/tests/test_integrations.py:125,152,186,261,318` | Signature, workspace-scoped delivery/body dedupe, fan-out to every connected workspace and storage are tested. “Visible as context” requires the deployments/integrations UI, which is absent. **G2.** |
 | 8 | Evidence-cited AI summary clearly separating hypotheses | **PARTIAL** | `backend/app/services/ai/orchestrator.py:43,50,112`; `backend/app/services/ai/evidence.py:34`; `backend/app/services/ai/prompts.py:93` | `backend/tests/test_ai.py:36,71,103,130,152,179,197,211` | 4-part output, citation dropping and injection handling are tested. The incident AI panel/feedback UI is absent. **G1.** |
 | 9 | Strict cross-workspace isolation | **PASS** | Tenant filters in `backend/app/api/deps.py` and the query layer; `backend/app/core/permissions.py` | `backend/tests/test_tenancy_rbac.py:8,29,72`; `backend/tests/test_incidents.py:241`; `backend/tests/test_ai.py:211` | Server-side 404 isolation and RBAC are tested. No cross-tenant UI path exists. |
 | 10 | Audit logging of sensitive actions | **PASS** | `backend/app/services/audit.py:15`; calls from incident, integration, AI and workspace services | `backend/tests/test_incidents.py:26,198`; `backend/tests/test_integrations.py:103`; `backend/tests/test_tenancy_rbac.py:72`; `backend/tests/test_ai.py:67` | Audit query UI is missing; tracked as G5. |
@@ -161,7 +161,7 @@ The following audit notes were completed in `test/backend-security-coverage`:
 | Area | Updated evidence |
 | :--- | :--- |
 | Token encryption | `backend/app/services/github.py:165,182` encrypts before persistence; `backend/app/models/integration.py:65-66` stores `secret_encrypted`; `backend/tests/test_integrations.py:227` asserts the stored value is not the plaintext, decrypts back to it, and the API never returns it. `backend/tests/test_integrations.py:246` asserts production/staging reject an empty `OZ_ENCRYPTION_KEY`. |
-| Webhook replay | `WebhookEvent.body_sha256` stores SHA-256 of the exact signed body with a unique per-provider index (`backend/app/models/integration.py:84,99`; migration `2d7e7c869f2d`). `backend/app/api/v1/webhooks.py:58-66,103` rejects a new delivery ID carrying the same body. `backend/tests/test_integrations.py:261` covers same delivery ID, new delivery ID with the same body, and a genuinely new event. No timestamp window is added: GitHub redeliveries carry the original payload. |
+| Webhook replay | `WebhookEvent` dedupe is workspace-scoped: unique `(workspace_id, provider, delivery_id)` and unique `(workspace_id, provider, body_sha256)` (`backend/app/models/integration.py:80-93`; migration `2d7e7c869f2d`). `backend/app/api/v1/webhooks.py:32-154` fans a signed delivery out to every connected workspace and rejects a new delivery ID carrying the same body within that workspace. `backend/tests/test_integrations.py:261` covers two workspaces sharing a repository (both receive the event, replay is duplicate, a new event reaches both); `:318` covers same delivery ID, new delivery ID with the same body, and a genuinely new event. No timestamp window is added: GitHub redeliveries carry the original payload. |
 | `POST /workspaces` | Direct test added at `backend/tests/test_tenancy_rbac.py:139`. |
 | `GET /workspaces/{id}` | Corrected: it was already directly tested at `backend/tests/test_tenancy_rbac.py:101,109`. The earlier “no direct test” note was wrong. |
 
@@ -178,12 +178,12 @@ Additional follow-ups opened after this audit:
 
 ## 6. What is already verified
 
-- **102 backend tests pass** (`cd backend && python -m pytest`).
+- **103 backend tests pass** (`cd backend && python -m pytest`).
 - **Ruff lint and format pass** on `app` and `tests`.
 - **Frontend production build passes** (`npm ci && npm run build`) with Vite 8 / React Router 7.
 - **CI on `main` is green** for the `CI` and `CodeQL` workflows at `f18a928`. The separate `Dependabot Updates` workflow failed while resolving a React 19 peer update; that is not the CI pipeline.
 - **Trivy CRITICAL/HIGH gate:** the merged image scans report 0 open CRITICAL/HIGH. Remaining findings are MEDIUM/LOW/UNKNOWN (G13).
-- **Token encryption and webhook body replay** now have direct tests (see §5a).
+- **Token encryption and workspace-scoped webhook body replay/fan-out** now have direct tests (see §5a).
 
 ## 7. What this audit does not claim
 
