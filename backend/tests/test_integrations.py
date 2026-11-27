@@ -8,7 +8,9 @@ import json
 
 import pytest
 
-from app.core.config import settings
+from app.core.config import Settings, settings
+from app.core.security import decrypt_secret
+from app.models.integration import Integration
 
 WEBHOOK_SECRET = "test-webhook-secret"
 
@@ -220,3 +222,94 @@ def test_engineer_cannot_connect_integration(client, owner, make_tenant, fake_gi
         json={"repository_full_name": "acme/payments"},
     )
     assert response.status_code == 403
+
+
+def test_github_token_is_encrypted_at_rest_and_never_returned(client, owner, fake_github, session_factory):
+    body = connect(client, owner)
+    do_callback(client, body["authorize_url"])
+
+    integrations = client.get(owner.url("/integrations"), headers=owner.headers)
+    assert integrations.status_code == 200
+    assert "ghs_fake_token_value" not in integrations.text
+    assert "secret_encrypted" not in integrations.text.lower()
+
+    with session_factory() as db:
+        integration = db.query(Integration).first()
+        assert integration is not None
+        assert integration.secret_encrypted
+        assert integration.secret_encrypted != "ghs_fake_token_value"
+        assert "ghs_fake_token_value" not in integration.secret_encrypted
+        assert decrypt_secret(integration.secret_encrypted) == "ghs_fake_token_value"
+
+
+@pytest.mark.parametrize("env", ["production", "staging"])
+def test_production_requires_encryption_key(env):
+    candidate = Settings(
+        env=env,
+        encryption_key="",
+        jwt_secret="x" * 32,
+        debug=False,
+        cors_origins=["https://example.com"],
+        database_url="postgresql+psycopg://oz:oz@localhost:5432/operation_zero",
+    )
+    problems = candidate.production_problems()
+    assert any("OZ_ENCRYPTION_KEY" in problem for problem in problems)
+    with pytest.raises(RuntimeError, match="OZ_ENCRYPTION_KEY"):
+        candidate.validate_startup()
+
+
+def test_webhook_replay_fingerprints_signed_body(client, owner, fake_github):
+    body = connect(client, owner)
+    do_callback(client, body["authorize_url"])
+
+    payload = {
+        "ref": "refs/heads/main",
+        "after": "abc123def456",
+        "commits": [{"id": "abc123def456", "timestamp": "2026-11-26T10:00:00Z"}],
+        "repository": {"full_name": "acme/payments"},
+        "sender": {"login": "dev-acme"},
+        "head_commit": {"timestamp": "2026-11-26T10:00:00Z"},
+    }
+    raw = json.dumps(payload).encode()
+
+    first = client.post(
+        "/api/v1/webhooks/github", content=raw, headers=signed_headers(raw, "delivery-replay-1")
+    )
+    assert first.status_code == 202
+    assert first.json()["status"] == "verified"
+
+    # Same delivery id: rejected as a duplicate.
+    same_delivery = client.post(
+        "/api/v1/webhooks/github", content=raw, headers=signed_headers(raw, "delivery-replay-1")
+    )
+    assert same_delivery.status_code == 202
+    assert same_delivery.json()["status"] == "duplicate"
+    assert same_delivery.json()["event_id"] == first.json()["event_id"]
+
+    # New delivery id, byte-identical signed body: also a duplicate.
+    same_body = client.post(
+        "/api/v1/webhooks/github", content=raw, headers=signed_headers(raw, "delivery-replay-2")
+    )
+    assert same_body.status_code == 202
+    assert same_body.json()["status"] == "duplicate"
+    assert same_body.json()["event_id"] == first.json()["event_id"]
+
+    events = client.get(owner.url("/deployments"), headers=owner.headers).json()["events"]
+    assert len(events) == 1
+
+    # A genuinely different signed event with a new delivery id is stored.
+    new_payload = {
+        **payload,
+        "after": "def456abc789",
+        "commits": [{"id": "def456abc789", "timestamp": "2026-11-26T11:00:00Z"}],
+    }
+    new_raw = json.dumps(new_payload).encode()
+    new_event = client.post(
+        "/api/v1/webhooks/github", content=new_raw, headers=signed_headers(new_raw, "delivery-replay-3")
+    )
+    assert new_event.status_code == 202
+    assert new_event.json()["status"] == "verified"
+    assert new_event.json()["event_id"] != first.json()["event_id"]
+
+    events = client.get(owner.url("/deployments"), headers=owner.headers).json()["events"]
+    assert len(events) == 2

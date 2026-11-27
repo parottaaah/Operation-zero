@@ -134,3 +134,25 @@ def test_overview_returns_control_room_data(client, owner, create_service):
     assert body["workspace"]["id"] == owner.workspace_id
     assert body["services"]["unknown"] == 1
     assert "ingestion" in body and "ai" in body
+
+
+def test_create_workspace_endpoint_creates_owner_membership(client, owner):
+    response = client.post(
+        "/api/v1/workspaces",
+        headers=owner.headers,
+        json={"name": "Second Workspace"},
+    )
+    assert response.status_code == 201, response.text
+    created = response.json()
+    assert created["name"] == "Second Workspace"
+    assert created["role"] == "owner"
+
+    workspaces = client.get("/api/v1/workspaces", headers=owner.headers).json()
+    assert {workspace["id"] for workspace in workspaces} >= {owner.workspace_id, created["id"]}
+
+    audit = client.get(
+        f"/api/v1/workspaces/{created['id']}/audit-events?action=workspace.create",
+        headers=owner.headers,
+    )
+    assert audit.status_code == 200
+    assert audit.json()["items"]
