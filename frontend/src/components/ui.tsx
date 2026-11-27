@@ -315,6 +315,18 @@ export function DataTable<T>({
                         if (event.key === "Enter" || event.key === " ") {
                           event.preventDefault();
                           onRowClick(row);
+                          return;
+                        }
+                        // Arrow keys move focus between clickable rows so an on-call
+                        // responder can triage a queue without touching the mouse.
+                        if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                          event.preventDefault();
+                          const sibling = (
+                            event.key === "ArrowDown"
+                              ? event.currentTarget.nextElementSibling
+                              : event.currentTarget.previousElementSibling
+                          ) as HTMLElement | null;
+                          sibling?.focus();
                         }
                       }
                     : undefined

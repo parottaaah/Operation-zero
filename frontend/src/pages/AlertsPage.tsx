@@ -11,8 +11,10 @@ import {
   PageHeader,
   Spinner,
 } from "../components/ui";
+import { Toasts } from "../components/Toasts";
 import { useAsync } from "../hooks/useAsync";
 import { useCursorPage } from "../hooks/useCursorPage";
+import { useToasts } from "../hooks/useToasts";
 import { api, describeError } from "../lib/api";
 import { formatRelative, formatTimestamp } from "../lib/format";
 import type {
@@ -55,12 +57,6 @@ const COMPARATORS: Array<{ value: Comparator; label: string; symbol: string }> =
 const WINDOWS = [300, 600, 900, 1_800, 3_600];
 const DEDUP_WINDOWS = [900, 1_800, 3_600, 21_600];
 
-interface Toast {
-  id: number;
-  text: string;
-  tone: "info" | "error";
-}
-
 function formatSeconds(seconds: number): string {
   if (seconds < 3_600) return `${Math.round(seconds / 60)}m`;
   return `${Math.round(seconds / 3_600)}h`;
@@ -75,7 +71,7 @@ export default function AlertsPage() {
   const [params, setParams] = useSearchParams();
   const writable = canWrite(role, "alerts");
   const canConvert = canWrite(role, "incidents");
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const { toasts, notify } = useToasts();
   const [refreshToken, setRefreshToken] = useState(0);
   const [ruleEditor, setRuleEditor] = useState<{ mode: "create" } | { mode: "edit"; rule: AlertRule } | null>(
     null,
@@ -86,12 +82,6 @@ export default function AlertsPage() {
 
   const status = (params.get("status") ?? "") as AlertStatus | "";
   const severity = (params.get("severity") ?? "") as AlertSeverity | "";
-
-  const notify = (text: string, tone: Toast["tone"] = "info") => {
-    const id = Date.now() + Math.random();
-    setToasts((current) => [...current, { id, text, tone }]);
-    window.setTimeout(() => setToasts((current) => current.filter((item) => item.id !== id)), 6_000);
-  };
 
   const refresh = () => setRefreshToken((value) => value + 1);
 
@@ -364,13 +354,7 @@ export default function AlertsPage() {
         </ConfirmDialog>
       )}
 
-      <div className="toast-stack" aria-live="polite">
-        {toasts.map((toast) => (
-          <div key={toast.id} className={`toast ${toast.tone === "error" ? "error" : ""}`}>
-            {toast.text}
-          </div>
-        ))}
-      </div>
+      <Toasts toasts={toasts} />
     </div>
   );
 }
@@ -387,7 +371,7 @@ function AlertQueue({
   writable: boolean;
   canConvert: boolean;
   members: Member[];
-  onNotify: (text: string, tone?: Toast["tone"]) => void;
+  onNotify: (text: string, tone?: "info" | "error") => void;
   onChanged: () => void;
 }) {
   const [params] = useSearchParams();
