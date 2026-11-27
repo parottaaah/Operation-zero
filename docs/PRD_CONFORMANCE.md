@@ -25,9 +25,9 @@ A PASS is never based on a README claim or a planned screen. Where a frontend sc
 | 16 core entities | 16 | 0 | 0 | 0 |
 | 18 core API endpoints | 18 | 0 | 0 | 0 |
 | Frontend views | 4 | 0 | 9 | 1 |
-| Gap register | — | 8 | 7 | 1 open decision |
+| Gap register | 2 | 7 | 6 | 1 open decision |
 
-**Overall:** the backend MVP is substantially implemented and tested. The largest conformance gap is the user-facing control room: 9 of 14 MVP views are `PlannedPage` or absent. The second gap is test realism: the suite still runs on SQLite and does not exercise Redis rate limiting.
+**Overall:** the backend MVP is substantially implemented and tested. The largest conformance gap is the user-facing control room: 9 of 14 MVP views are `PlannedPage` or absent. The test base now runs the full suite on SQLite and PostgreSQL, and the Redis login rate-limit path is exercised in CI. Remaining gaps are the UI, reproducibility, container smoke and worker/item follow-ups below.
 
 ---
 
@@ -141,8 +141,8 @@ Each gap has a GitHub issue. The UI gaps are PARTIAL in the audit because the ba
 | **G4** | PARTIAL | Alerts queue/rules and notification centre UI | [#14](https://github.com/parottaaah/Operation-zero/issues/14) |
 | **G5** | PARTIAL | Reports, audit search and settings/member-management UI | [#15](https://github.com/parottaaah/Operation-zero/issues/15) |
 | **G6** | PARTIAL | Service detail and health-history UI (route missing entirely) | [#16](https://github.com/parottaaah/Operation-zero/issues/16) |
-| **G7** | MISSING | Run pytest against real PostgreSQL in CI (currently SQLite fixtures) | [#17](https://github.com/parottaaah/Operation-zero/issues/17) |
-| **G8** | PARTIAL | Real Redis rate-limit integration test. PDF generation is already covered by `backend/tests/test_incidents.py:161` | [#18](https://github.com/parottaaah/Operation-zero/issues/18) |
+| **G7** | PASS | Full suite runs on PostgreSQL in CI via `OZ_TEST_DATABASE_URL`; SQLite remains the fast default. Resolved in M1-2. | [#17](https://github.com/parottaaah/Operation-zero/issues/17) |
+| **G8** | PASS | Real Redis login rate-limit integration test; PDF generation was already covered by `backend/tests/test_incidents.py:161`. Resolved in M1-2. | [#18](https://github.com/parottaaah/Operation-zero/issues/18) |
 | **G9** | MISSING | Pin or lock backend Python dependencies for reproducible builds | [#19](https://github.com/parottaaah/Operation-zero/issues/19) |
 | **G10** | MISSING | Pin GitHub Actions to commit SHAs | [#20](https://github.com/parottaaah/Operation-zero/issues/20) |
 | **G11** | MISSING | `frontend/Dockerfile` uses `npm install`; switch to `npm ci` | [#21](https://github.com/parottaaah/Operation-zero/issues/21) |
@@ -166,6 +166,8 @@ The following audit notes were completed in `test/backend-security-coverage`:
 | `GET /workspaces/{id}` | Corrected: it was already directly tested at `backend/tests/test_tenancy_rbac.py:101,109`. The earlier “no direct test” note was wrong. |
 | Cursor pagination | `backend/tests/test_cursor_pagination.py` traverses services, logs, alerts, audit-events and deployment-events with more rows than the page limit, follows `next_cursor`, asserts no duplicates or gaps, asserts the last page has no cursor, and asserts malformed cursors return a 4xx (never 500). |
 | OpenAPI path/method coverage | `backend/tests/test_auth.py::test_openapi_contract_contains_mvp_surface` asserts every core PRD path and method against the real `/openapi.json`. Request/response schema, status-code and auth contract coverage remains tracked by #30. |
+| PostgreSQL test base | `backend/tests/conftest.py` reads `OZ_TEST_DATABASE_URL`; when set, every test creates and drops the schema on that PostgreSQL database. CI creates `operation_zero_test` and runs the full suite on SQLite and PostgreSQL. Resolves #17. |
+| Redis rate-limit integration | `backend/tests/test_integration_redis.py` (marked `integration`) exhausts the login limit through real Redis and asserts `429 rate_limited`. It skips locally when `OZ_REDIS_URL` is absent; CI sets `OZ_REQUIRE_REDIS_TESTS=1` so a missing Redis service fails instead of skipping. Resolves #18. |
 
 Additional follow-ups opened after this audit:
 
@@ -180,13 +182,14 @@ Additional follow-ups opened after this audit:
 
 ## 6. What is already verified
 
-- **108 backend tests pass** (`cd backend && python -m pytest`).
+- **109 backend tests** (`cd backend && python -m pytest`); CI runs the full suite on both SQLite and PostgreSQL.
 - **Ruff lint and format pass** on `app` and `tests`.
 - **Frontend production build passes** (`npm ci && npm run build`) with Vite 8 / React Router 7.
-- **CI on `main` is green** for the `CI` and `CodeQL` workflows at `f18a928`. The separate `Dependabot Updates` workflow failed while resolving a React 19 peer update; that is not the CI pipeline.
+- **CI on `main` is green** for the `CI` and `CodeQL` workflows at `c65f7af`.
 - **Trivy CRITICAL/HIGH gate:** the merged image scans report 0 open CRITICAL/HIGH. Remaining findings are MEDIUM/LOW/UNKNOWN (G13).
 - **Token encryption and workspace-scoped webhook body replay/fan-out** now have direct tests (see §5a).
 - **Cursor pagination and OpenAPI path/method coverage** now have direct tests (see §5a).
+- **PostgreSQL full-suite and real Redis rate-limit tests** now run in CI (see §5a).
 
 ## 7. What this audit does not claim
 
@@ -210,4 +213,19 @@ npm run build
 gh run list --branch main --limit 3
 ```
 
-The test suite currently uses in-memory SQLite fixtures (`backend/tests/conftest.py:22-27`), and Redis is disabled in tests (`:60`). That is why G7 and G8 exist.
+By default the suite uses in-memory SQLite. To run it against PostgreSQL:
+
+```bash
+createdb -h localhost -U oz operation_zero_test   # once
+OZ_TEST_DATABASE_URL=postgresql+psycopg://oz:oz@localhost:5432/operation_zero_test \
+  python -m pytest
+```
+
+To run the Redis integration test:
+
+```bash
+OZ_REDIS_URL=redis://localhost:6379/0 OZ_REQUIRE_REDIS_TESTS=1 \
+  python -m pytest tests/test_integration_redis.py
+```
+
+CI sets both and runs the full suite on SQLite and PostgreSQL. The Redis test skips locally when `OZ_REDIS_URL` is unset and fails in CI when Redis is required but absent.
