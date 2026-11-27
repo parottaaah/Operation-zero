@@ -164,6 +164,8 @@ The following audit notes were completed in `test/backend-security-coverage`:
 | Webhook replay | `WebhookEvent` dedupe is workspace-scoped: unique `(workspace_id, provider, delivery_id)` and unique `(workspace_id, provider, body_sha256)` (`backend/app/models/integration.py:80-93`; migration `2d7e7c869f2d`). `backend/app/api/v1/webhooks.py:32-154` fans a signed delivery out to every connected workspace and rejects a new delivery ID carrying the same body within that workspace. `backend/tests/test_integrations.py:261` covers two workspaces sharing a repository (both receive the event, replay is duplicate, a new event reaches both); `:318` covers same delivery ID, new delivery ID with the same body, and a genuinely new event. No timestamp window is added: GitHub redeliveries carry the original payload. |
 | `POST /workspaces` | Direct test added at `backend/tests/test_tenancy_rbac.py:139`. |
 | `GET /workspaces/{id}` | Corrected: it was already directly tested at `backend/tests/test_tenancy_rbac.py:101,109`. The earlier “no direct test” note was wrong. |
+| Cursor pagination | `backend/tests/test_cursor_pagination.py` traverses services, logs, alerts, audit-events and deployment-events with more rows than the page limit, follows `next_cursor`, asserts no duplicates or gaps, asserts the last page has no cursor, and asserts malformed cursors return a 4xx (never 500). |
+| OpenAPI path/method coverage | `backend/tests/test_auth.py::test_openapi_contract_contains_mvp_surface` asserts every core PRD path and method against the real `/openapi.json`. Request/response schema, status-code and auth contract coverage remains tracked by #30. |
 
 Additional follow-ups opened after this audit:
 
@@ -178,12 +180,13 @@ Additional follow-ups opened after this audit:
 
 ## 6. What is already verified
 
-- **103 backend tests pass** (`cd backend && python -m pytest`).
+- **108 backend tests pass** (`cd backend && python -m pytest`).
 - **Ruff lint and format pass** on `app` and `tests`.
 - **Frontend production build passes** (`npm ci && npm run build`) with Vite 8 / React Router 7.
 - **CI on `main` is green** for the `CI` and `CodeQL` workflows at `f18a928`. The separate `Dependabot Updates` workflow failed while resolving a React 19 peer update; that is not the CI pipeline.
 - **Trivy CRITICAL/HIGH gate:** the merged image scans report 0 open CRITICAL/HIGH. Remaining findings are MEDIUM/LOW/UNKNOWN (G13).
 - **Token encryption and workspace-scoped webhook body replay/fan-out** now have direct tests (see §5a).
+- **Cursor pagination and OpenAPI path/method coverage** now have direct tests (see §5a).
 
 ## 7. What this audit does not claim
 
