@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   backend:
-    name: Backend (ruff + pytest, Postgres + Redis)
+    name: Backend (ruff + pytest, SQLite + PostgreSQL + Redis)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -46,6 +46,7 @@ jobs:
       OZ_ENV: test
       OZ_DATABASE_URL: postgresql+psycopg://oz:oz@localhost:5432/operation_zero
       OZ_REDIS_URL: redis://localhost:6379/0
+      OZ_REQUIRE_REDIS_TESTS: "1"
       OZ_REPORTS_DIR: ./data/reports
     defaults:
       run:
@@ -78,7 +79,25 @@ jobs:
       - name: Verify Redis connectivity
         run: python -c "import os, redis; assert redis.from_url(os.environ['OZ_REDIS_URL']).ping()"
 
-      - name: Run tests
+      - name: Create PostgreSQL test database
+        run: |
+          python - <<'PY'
+          import psycopg
+
+          conn = psycopg.connect("host=localhost port=5432 user=oz password=oz dbname=postgres")
+          conn.autocommit = True
+          with conn.cursor() as cur:
+              cur.execute("DROP DATABASE IF EXISTS operation_zero_test")
+              cur.execute("CREATE DATABASE operation_zero_test")
+          conn.close()
+          PY
+
+      - name: Run tests (SQLite)
+        run: python -m pytest
+
+      - name: Run tests (PostgreSQL)
+        env:
+          OZ_TEST_DATABASE_URL: postgresql+psycopg://oz:oz@localhost:5432/operation_zero_test
         run: python -m pytest
 
   frontend:
