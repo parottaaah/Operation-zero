@@ -4,6 +4,8 @@ import { useAuth } from "./auth/AuthContext";
 import Layout from "./components/Layout";
 import { EmptyState, LoadingBlock } from "./components/ui";
 import AlertsPage from "./pages/AlertsPage";
+import IncidentDetailPage from "./pages/IncidentDetailPage";
+import IncidentsPage from "./pages/IncidentsPage";
 import LoginPage from "./pages/LoginPage";
 import LogsPage from "./pages/LogsPage";
 import OverviewPage from "./pages/OverviewPage";
@@ -77,8 +79,8 @@ export default function App() {
           <Route path="services" element={<ServicesPage />} />
           <Route path="logs" element={<LogsPage />} />
           <Route path="alerts" element={<AlertsPage />} />
-          <Route path="incidents" element={<PlannedPage screen="incidents" />} />
-          <Route path="incidents/:incidentId" element={<PlannedPage screen="incident" />} />
+          <Route path="incidents" element={<IncidentsPage />} />
+          <Route path="incidents/:incidentId" element={<IncidentDetailPage />} />
           <Route path="deployments" element={<PlannedPage screen="deployments" />} />
           <Route path="security" element={<PlannedPage screen="security" />} />
           <Route path="integrations" element={<PlannedPage screen="integrations" />} />

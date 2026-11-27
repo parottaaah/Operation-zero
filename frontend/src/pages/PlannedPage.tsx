@@ -9,8 +9,6 @@ import { Card, Notice, PageHeader } from "../components/ui";
  * and add a real page the moment that view lands.
  */
 type ScreenKey =
-  | "incidents"
-  | "incident"
   | "deployments"
   | "security"
   | "integrations"
@@ -25,36 +23,6 @@ interface ScreenSpec {
 }
 
 const SCREENS: Record<ScreenKey, ScreenSpec> = {
-  incidents: {
-    title: "Incidents",
-    subtitle: "Every incident with owner, severity and current lifecycle state.",
-    api: [
-      "GET /workspaces/{id}/incidents (cursor paginated, filterable by status and severity)",
-      "POST /workspaces/{id}/incidents to open one manually",
-      "Server-enforced lifecycle transitions (open → acknowledged → investigating → …)",
-    ],
-    planned: [
-      "Triage queue with status and severity filters",
-      "Inline owner assignment and acknowledgement",
-      "Keyboard-first navigation for on-call use",
-    ],
-  },
-  incident: {
-    title: "Incident room",
-    subtitle: "Timeline, evidence, follow-ups and evidence-grounded AI investigation.",
-    api: [
-      "GET /incidents/{id} with events, evidence links and AI analysis briefs",
-      "POST /incidents/{id}/comments, /evidence, /reports",
-      "POST /incidents/{id}/ai-analysis (read-only output, human-reviewed)",
-      "PATCH /incidents/{id} with transition and resolution rules enforced server-side",
-    ],
-    planned: [
-      "Timeline with actor, from/to status and inline comments",
-      "Evidence list that deep-links to the cited log event or health result",
-      "AI panel showing observed facts with citations, hypotheses marked unvalidated",
-      "Report export in Markdown and PDF",
-    ],
-  },
   deployments: {
     title: "Deployments",
     subtitle: "Verified repository and deployment events, shown as context - never as proof of cause.",
@@ -156,9 +124,10 @@ export default function PlannedPage({ screen }: { screen: ScreenKey }) {
       <Card title="Working views today">
         <p style={{ margin: 0 }}>
           <Link to="/">Overview</Link>, <Link to="/services">Services</Link>,{" "}
-          <Link to="/logs">Logs</Link> and <Link to="/alerts">Alerts</Link> are implemented end to
-          end, including the service registration form, the ingestion-key reveal, the log explorer and
-          the alert queue with its rule editor.
+          <Link to="/logs">Logs</Link>, <Link to="/alerts">Alerts</Link> and{" "}
+          <Link to="/incidents">Incidents</Link> are implemented end to end, including the service
+          registration form, the ingestion-key reveal, the log explorer, the alert queue and the
+          incident room with its timeline, evidence and AI panel.
         </p>
       </Card>
     </div>
