@@ -180,17 +180,16 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.image }}
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}
 
-      # Fail on fixable high or critical findings. Unfixed base-image CVEs are
-      # still reported in SARIF but do not block until a fix exists.
-      - name: Trivy scan ${{ matrix.image }}
+      # Keep every severity visible in the Security tab. This step never fails
+      # the job; the blocking gate below uses only the CRITICAL/HIGH subset.
+      - name: Trivy SARIF report ${{ matrix.image }}
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ matrix.image }}:ci
           format: sarif
           output: trivy-${{ matrix.image }}.sarif
-          severity: CRITICAL,HIGH
           ignore-unfixed: true
-          exit-code: "1"
+          exit-code: "0"
 
       - name: Upload Trivy SARIF
         if: always()
@@ -198,3 +197,13 @@ jobs:
         with:
           sarif_file: trivy-${{ matrix.image }}.sarif
           category: trivy-${{ matrix.image }}
+
+      # Blocking gate: fail on fixable CRITICAL/HIGH findings only.
+      - name: Trivy gate ${{ matrix.image }}
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ matrix.image }}:ci
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
